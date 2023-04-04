@@ -10,7 +10,9 @@ from google.cloud import secretmanager
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
-    DEBUG=(bool, True), SECRET_KEY=(str, "django-insecure_drf-circleci-gcp-template")
+    DEBUG=(bool, True),
+    SECRET_KEY=(str, "django-insecure_roux"),
+    ADMIN_PASS=(str, "pass"),
 )
 env_file = os.path.join(BASE_DIR, ".env")
 
@@ -31,9 +33,7 @@ elif os.environ.get("GOOGLE_CLOUD_PROJECT", None):
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 
     client = secretmanager.SecretManagerServiceClient()
-    settings_name = os.environ.get(
-        "SETTINGS_NAME", "drf-circleci-gcp-template-settings"
-    )
+    settings_name = os.environ.get("SETTINGS_NAME", "roux-settings-prod")
     name = f"projects/{project_id}/secrets/{settings_name}/versions/latest"
     payload = client.access_secret_version(name=name).payload.data.decode("UTF-8")
 
@@ -44,6 +44,8 @@ else:
 SECRET_KEY = env("SECRET_KEY")
 
 DEBUG = env("DEBUG")
+
+ADMIN_PASS = env("ADMIN_PASS")
 
 CLOUDRUN_SERVICE_URL = env("CLOUDRUN_SERVICE_URL", default=None)
 if CLOUDRUN_SERVICE_URL:
@@ -62,9 +64,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # packages
+    "django_filters",
     "rest_framework",
     # apps
-    "apps.examples.apps.ExamplesConfig",
+    "apps.businesses.apps.BusinessesConfig",
 ]
 
 MIDDLEWARE = [
@@ -82,7 +85,7 @@ ROOT_URLCONF = "core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": ["templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -126,19 +129,8 @@ STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "public/static")
 STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 
-# Enable if you use Google Cloud Storage
-# GS_BUCKET_NAME = "drf-circleci-gcp-template-bucket"
-# GS_DEFAULT_ACL = "publicRead"
-# STORAGES = {
-#     "default": {
-#         "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
-#     },
-#     "staticfiles": {
-#         "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
-#     },
-# }
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Enable if you use JS (https://docs.djangoproject.com/en/4.2/howto/csrf/)
-# CSRF_USE_SESSIONS = True
+CSRF_USE_SESSIONS = True
+
+GOOGLE_MAPS_API_KEY = env("GOOGLE_MAPS_API_KEY", default=None)

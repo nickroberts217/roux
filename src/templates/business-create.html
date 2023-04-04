@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block css %}
+<style>
+    [x-cloak] {
+        display: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb is-small" aria-label="breadcrumbs">
+    <ul>
+        <li><a class="has-text-danger" href="/"><strong>ROUX</strong></a></li>
+        <li class="is-active"><a href="#" aria-current="page">{{ name }}</a></li>
+    </ul>
+</nav>
+<hr>
+<div x-data="view" @init-autocomplete.window="initAutocomplete" @submit-form.window="submitForm">
+    <div class="block" x-cloak x-show="! autocomplete">
+        <div id="suggestions"></div>
+    </div>
+    <div class="block" x-cloak x-show="autocomplete" x-transition:enter.duration.500ms>
+        <p class="is-size-7 mb-4 mt-6"><strong>Try searching for {{ name }} instead</strong></p>
+        <div class="field mb-2">
+            <div class="control">
+                <input class="input" type="text" placeholder="Enter the business name or address"
+                       x-ref="autocompleteInput" autocomplete="off">
+            </div>
+        </div>
+        <button class="button is-small is-light mt-6" @click="noGoogle = true">I can't find it</button>
+    </div>
+    <div class="block" x-cloak x-show="noGoogle" x-transition:enter.duration.500ms>
+        <article class="message is-info is-light is-small">
+            <div class="message-body">
+                If you are having trouble finding {{ name }} please go to our <a href="#">Contact</a> page.
+                We use Google's <a href="https://developers.google.com/maps/documentation/places/web-service"
+                                   target="_blank">Places API</a>
+                and it is <i>mostly</i> reliable.
+            </div>
+        </article>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{% csrf_token %}
+<script>
+    function googleReady() {
+        document.dispatchEvent(new Event("google:init"));
+    }
+
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("view", () => ({
+            name: "",
+            formatted_address: "",
+            google_id: "",
+            autocomplete: false,
+            findPlaceFromQueryService: null,
+            element: null,
+            noGoogle: false,
+            error: false,
+            init() {
+                if (typeof window.google === "undefined") {
+                    document.addEventListener("google:init", () => this.initService());
+                } else {
+                    this.initService();
+                }
+            },
+            initService() {
+                const coordinatesForNYC = new window.google.maps.LatLng(40.759296, -73.985573);
+                this.findPlaceFromQueryService = new window.google.maps.places.PlacesService(document.createElement("div"));
+                this.findPlaceFromQueryService.findPlaceFromQuery(
+                    {
+                        fields: ["name", "formatted_address", "place_id"],
+                        query: "{{ name|safe }}",
+                        locationBias: coordinatesForNYC,
+                    },
+                    this.handleFindPlaceFromQueryResponse
+                );
+            },
+            handleFindPlaceFromQueryResponse(places) {
+                const heading = "Did you mean any of the following?";
+                const header = `<p class="is-size-7 mb-4 mt-6"><strong>${heading}</strong></p>`;
+                const suggestions = places.map((place) => {
+                    return `<p class="is-size-7 mb-2"><a data-id="${place.place_id}" data-name="${place.name}" data-address="${place.formatted_address}" x-on:click="handleSuggestionsResponse">${place.name}, ${place.formatted_address}</a></p>`;
+                }).join("");
+                const btn = '<button class="button is-small is-light mt-6" x-on:click="useAutocomplete">Nope</button>';
+                document.getElementById("suggestions").innerHTML = `<div>${header}${suggestions}${btn}</div`;
+            },
+            handleSuggestionsResponse(e) {
+                this.name = e.currentTarget.dataset.name;
+                this.formatted_address = e.currentTarget.dataset.address;
+                this.google_id = e.currentTarget.dataset.id;
+
+                this.findPlaceFromQueryService.getDetails(
+                    {
+                        placeId: this.google_id,
+                        fields: ["address_components"],
+                    },
+                    this.handleGetDetailsResponse,
+                );
+            },
+            useAutocomplete() {
+                this.autocomplete = true;
+                window.dispatchEvent(new Event("init-autocomplete"));
+            },
+            initAutocomplete() {
+                this.element = this.$el.querySelector(":scope [x-ref='autocompleteInput']");
+                const autocomplete = new window.google.maps.places.Autocomplete(this.element, {
+                    componentRestrictions: {country: ["us"]},
+                    fields: ["name", "formatted_address", "place_id"],
+                    types: ["establishment"],
+                });
+                window.google.maps.event.addListener(autocomplete, "place_changed", () => this.handleAutocompleteResponse(autocomplete.getPlace()));
+            },
+            handleAutocompleteResponse(place) {
+                this.name = place.name;
+                this.formatted_address = place.formatted_address;
+                this.google_id = place.place_id;
+
+                this.findPlaceFromQueryService.getDetails(
+                    {
+                        placeId: this.google_id,
+                        fields: ["address_components"],
+                    },
+                    this.handleGetDetailsResponse,
+                );
+            },
+            handleGetDetailsResponse(place) {
+                const newData = {
+                    "neighborhood": "",
+                    "locality": "",
+                    "state": "",
+                    "postal_code": "",
+                };
+                for (const component of place.address_components) {
+                    const componentType = component.types[0];
+
+                    switch (componentType) {
+                        case "neighborhood": {
+                            newData["neighborhood"] = component.long_name;
+                            break;
+                        }
+                        case "sublocality_level_1": {
+                            newData["locality"] = component.long_name;
+                            break;
+                        }
+                        case "locality": {
+                            newData["locality"] = component.long_name;
+                            break;
+                        }
+                        case "administrative_area_level_1": {
+                            newData["state"] = component.short_name;
+                            break;
+                        }
+                        case "postal_code": {
+                            newData["postal_code"] = component.long_name;
+                            break;
+                        }
+                    }
+                }
+
+                window.dispatchEvent(new CustomEvent("submit-form", {"detail": newData}));
+            },
+            submitForm(e) {
+                const data = {
+                    name: this.name,
+                    google_id: this.google_id,
+                    formatted_address: this.formatted_address,
+                    postal_code: {
+                        value: e.detail.postal_code,
+                    },
+                    neighborhood: {
+                        value: e.detail.neighborhood,
+                    },
+                    locality: {
+                        value: e.detail.locality,
+                    },
+                    state: {
+                        value: e.detail.state,
+                    },
+                }
+                fetch("/api/businesses/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                    body: JSON.stringify(data),
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+                    return response.json();
+                }).then((data) => {
+                    location.href = `/${data.id}`;
+                }).catch(() => {
+                    this.error = true;
+                })
+            }
+        }))
+    });
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=googleReady&libraries=places&v=weekly"
+        defer></script>
+{% endblock %}

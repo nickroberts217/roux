@@ -1,0 +1,55 @@
+---
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "--no-cache"
+        "-t",
+        "gcr.io/${PROJECT_ID}/${_SERVICE_NAME}",
+        "."
+        "-f"
+        "./Dockerfile"
+      ]
+    id: Build
+  - name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "push",
+        "gcr.io/${PROJECT_ID}/${_SERVICE_NAME}"
+      ]
+    id: Push
+  - name: gcr.io/google-appengine/exec-wrapper
+    args:
+      [
+        "-i",
+        "gcr.io/$PROJECT_ID/${_SERVICE_NAME}",
+        "-s",
+        "${PROJECT_ID}:${_REGION}:${_INSTANCE_NAME}",
+        "-e",
+        "SETTINGS_NAME=${_SECRET_SETTINGS_NAME}",
+        "--",
+        "python",
+        "manage.py",
+        "migrate",
+      ]
+    id: Migrate
+  - name: gcr.io/google-appengine/exec-wrapper
+    args:
+      [
+        "-i",
+        "gcr.io/$PROJECT_ID/${_SERVICE_NAME}",
+        "-s",
+        "${PROJECT_ID}:${_REGION}:${_INSTANCE_NAME}",
+        "-e",
+        "SETTINGS_NAME=${_SECRET_SETTINGS_NAME}",
+        "--",
+        "python",
+        "manage.py",
+        "collectstatic",
+        "--no-input",
+      ]
+    id: Collect static
+
+images:
+  - "gcr.io/${PROJECT_ID}/${_SERVICE_NAME}"

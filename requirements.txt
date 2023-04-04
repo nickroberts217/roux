@@ -1,6 +1,7 @@
 black==23.1.0
 Django==4.2b1
 django-environ==0.10.0
+django-filter==22.1
 django-storages==1.13.2
 djangorestframework==3.14.0
 google-cloud-secret-manager==2.16.0

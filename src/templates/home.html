@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block css %}
+<style>
+	[x-cloak] {
+		display: none !important;
+	}
+
+	.suggestion:hover {
+		background: white;
+		padding-left: 1em;
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="breadcrumbs">
+	<ul>
+		<li><a class="has-text-danger" href="/" aria-current="page"><strong>ROUX</strong></a></li>
+	</ul>
+</nav>
+<div x-data="view" x-init="$watch('searchValue', value => find())">
+	<div class="block">
+		<div class="box has-background-white-ter">
+			<input class="input is-large is-static" type="text" placeholder="i.e. Book Club"
+				   x-model.debounce.500ms="searchValue">
+			<div x-cloak x-show="searchValue.length > 0" x-transition:enter.duration.500ms>
+				<hr class="has-background-white">
+				<div class="suggestion is-clickable py-3" :data-id="0"
+					 @click="location.href = '/create/' + searchValue">
+					<p class="is-size-6 has-text-warning-dark">CREATE&emsp;"<span class="has-text-dark"
+																				  x-text="searchValue"></span>"</p>
+				</div>
+				<template x-for="result in results">
+					<div class="suggestion is-clickable py-3" :data-id="result.id"
+						 @click="location.href = '/' + result.id">
+						<p class="is-size-6 has-text-dark"><span x-text="result.name"></span></p>
+					</div>
+				</template>
+			</div>
+		</div>
+	</div>
+	<div x-data="{ localities: [], selectedLocality: null, businessesInLocality: [] }"
+		 x-init="localities = await fetchLocalities(); selectedLocality = localities[0]; businessesInLocality = await fetchMatchedBusinesses(selectedLocality.id)">
+		<div class="block" x-cloak x-show="localities.length > 0" x-transition:enter.duration.400ms>
+			<nav class="panel is-danger">
+				<p class="panel-heading"></p>
+				<p class="panel-tabs">
+					<template x-for="locality in localities">
+						<a class="has-text-dark" :class="locality !== selectedLocality || 'is-active'"
+						   x-text="locality.readable_value"
+						   @click="selectedLocality = locality; businessesInLocality = await fetchMatchedBusinesses(selectedLocality.id)"></a>
+					</template>
+				</p>
+				<template x-for="business in businessesInLocality">
+					<a class="panel-block" :href="'/' + business.id">
+						<span class="is-size-7 mr-4" x-text="business.name"></span>
+						<span class="is-size-7 has-text-grey" x-text="business.postal_code.readable_value"></span>
+					</a>
+				</template>
+			</nav>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block js %}
+<script>
+	async function fetchLocalities() {
+		return (await (await fetch("/api/businesses/localities/?limit=3")).json()).results;
+	}
+
+	async function fetchMatchedBusinesses(localityId) {
+		return (await (await fetch(`/api/businesses/?locality_id=${localityId}&limit=20`)).json()).results;
+	}
+
+	document.addEventListener("alpine:init", () => {
+		Alpine.data("view", () => ({
+			searchValue: "",
+			count: 0,
+			next: null,
+			previous: null,
+			results: [],
+			async find() {
+				if (this.searchValue.length === 0) return;
+				const response = await (await fetch(`/api/businesses/?name=${this.searchValue}&limit=4`)).json();
+				this.count = response.count;
+				this.next = response.next;
+				this.previous = response.previous;
+				this.results = response.results;
+			},
+		}))
+	});
+</script>
+{% endblock %}

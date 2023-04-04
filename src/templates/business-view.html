@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block css %}
+<style>
+    [x-cloak] {
+        display: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="{ is_loading: true}" @init-complete.window="is_loading = false">
+    <div x-cloak x-show="! is_loading" x-transition:enter.duration.500ms>
+        <div x-data="view">
+            <template x-if="name">
+                <nav class="breadcrumb is-small" aria-label="breadcrumbs">
+                    <ul>
+                        <li><a class="has-text-danger" href="/"><strong>ROUX</strong></a></li>
+                        <li class="is-active"><a href="#" aria-current="page" x-text="name"></a></li>
+                    </ul>
+                </nav>
+            </template>
+            <hr>
+            <div class="columns is-mobile">
+                <div class="column is-four-fifths">
+                    <p class="heading has-text-warning-dark">Address</p>
+                    <template x-if="formatted_address">
+                        <p class="heading mb-1" x-text="formatted_address"></p>
+                    </template>
+                    <template x-if="formatted_address_last_verified_at_elapsed_time">
+                        <span class="icon-text has-text-success-dark">
+                            <span class="is-size-7" x-text="formatted_address_last_verified_at_elapsed_time"></span>
+                            <span class="icon">
+                                <i class="fa-solid fa-check-double"></i>
+                            </span>
+                        </span>
+                    </template>
+                </div>
+                <div class="column">
+                    <div class="buttons is-right are-small">
+                        <button class="button is-success is-light" @click="handleAddressVerify">
+                            <span class="icon">
+                                <i class="fa-solid fa-check-double"></i>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <div class="columns is-multiline">
+                <template x-for="(amenity, index) in amenities">
+                    <div class="column is-half">
+                        <div class="columns is-mobile">
+                            <div class="column is-four-fifths">
+                                <p class="heading has-text-warning-dark" x-text="amenity.readable_type"></p>
+                                <p class="heading mb-1" x-text="amenity.readable_is_supported"></p>
+                                <template x-if="amenity.is_supported !== null">
+                                    <span class="icon-text has-text-success-dark">
+                                        <span class="is-size-7"
+                                              x-text="amenity.last_verified_at_elapsed_time"></span>
+                                        <span class="icon">
+                                            <i class="fa-solid fa-check-double"></i>
+                                        </span>
+                                    </span>
+                                </template>
+                            </div>
+                            <div class="column">
+                                <div class="buttons is-right are-small">
+                                    <button class="button is-light"
+                                            :class="amenity.is_supported === null || 'is-success'"
+                                            @click="amenity.is_supported === null ? handleAmenityVerifyToBeTrue(amenity.id, index) : handleAmenityVerify(amenity.id, index)">
+                                            <span class="icon">
+                                                <i class="fa-solid"
+                                                   :class="amenity.is_supported === null ? 'fa-y' : 'fa-check-double'"></i>
+                                            </span>
+                                    </button>
+                                    <button class="button" :class="amenity.is_supported !== null || 'is-light'"
+                                            @click="amenity.is_supported === null ? handleAmenityVerifyToBeFalse(amenity.id, index) : await handleOpenModal(amenity.id)">
+                                            <span class="icon">
+                                                <i :class="amenity.is_supported === null ? 'fa-solid fa-n' : 'fa-regular fa-comment'"></i>
+                                            </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <hr>
+            <div class="buttons is-right mb-0">
+                <button class="button is-success is-light" @click="handleAmenityBulkVerify">
+                    <span class="icon">
+                        <i class="fa-solid fa-check-double"></i>
+                    </span>
+                    <span>Verify all</span>
+                </button>
+                <button class="button is-light" @click="location.href = '/'">Home</button>
+            </div>
+            <div class="modal" :class="! showModal || 'is-active'" x-data="{ needsLogin: false }">
+                <div class="modal-background" @click="await handleCloseModal(); needsLogin = false"></div>
+                <div class="modal-content">
+                    <div class="block" x-cloak x-show="needsLogin" x-transition:enter.duration.500ms>
+                        <article class="message is-info is-light is-small">
+                            <div class="message-body">
+                                <a href="#">Sign in</a> to comment or fix.
+                                This helps keep Roux factual.
+                            </div>
+                        </article>
+                    </div>
+                    <template x-if="currentAmenity">
+                        <div class="box">
+                            <div class="block">
+                                <div class="has-text-centered">
+                                    <p class="heading has-text-warning-dark" x-text="currentAmenity.readable_type"></p>
+                                    <div class="control">
+                                        <label class="radio">
+                                            <input type="radio" name="answer" :checked="currentAmenity.is_supported"
+                                                   :disabled="currentAmenity.is_supported"
+                                                   @click.prevent="needsLogin = true">
+                                            <span class="is-size-7">Yes</span>
+                                        </label>
+                                        <label class="radio">
+                                            <input type="radio" name="answer" :checked="! currentAmenity.is_supported"
+                                                   :disabled="! currentAmenity.is_supported"
+                                                   @click.prevent="needsLogin = true">
+                                            <span class="is-size-7">No</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="block">
+                                <button class="button is-fullwidth" @click="needsLogin = true">
+                                    <span class="icon">
+                                        <i class="fa-regular fa-comment"></i>
+                                    </span>
+                                    <span>This information is&nbsp;<i>mostly</i>&nbsp;correct</span>
+                                </button>
+                            </div>
+                            <p class="is-size-7">0 comments</p>
+                        </div>
+                    </template>
+                </div>
+                <button class="modal-close is-large" aria-label="close"
+                        @click="await handleCloseModal(); needsLogin = false"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block js %}
+{% csrf_token %}
+<script>
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("view", () => ({
+            name: null,
+            formatted_address: null,
+            formatted_address_last_verified_at_elapsed_time: null,
+            amenities: [],
+            error: false,
+            is_loading: true,
+            showModal: false,
+            currentAmenity: null,
+            async init() {
+                const business = await (await fetch("/api/businesses/{{ pk }}")).json();
+                this.id = business.id;
+                this.name = business.name;
+                this.formatted_address = business.formatted_address;
+                this.formatted_address_last_verified_at_elapsed_time = business.formatted_address_last_verified_at_elapsed_time;
+                this.amenities = business.amenities;
+
+                window.dispatchEvent(new Event("init-complete"));
+            },
+            handleAddressVerify() {
+                fetch(`/api/businesses/${this.id}/address/verify/`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    return response.json();
+                }).then((data) => {
+                    this.formatted_address_last_verified_at_elapsed_time = data.formatted_address_last_verified_at_elapsed_time;
+                }).catch(() => {
+                    this.error = true;
+                });
+            },
+            handleAmenityVerifyToBeTrue(amenityId, arrayIndex) {
+                fetch(`/api/businesses/amenities/${amenityId}/verify/to-be-true/`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    return response.json();
+                }).then((data) => {
+                    this.amenities[arrayIndex] = data;
+                }).catch(() => {
+                    this.error = true;
+                });
+            },
+            handleAmenityVerifyToBeFalse(amenityId, arrayIndex) {
+                fetch(`/api/businesses/amenities/${amenityId}/verify/to-be-false/`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    return response.json();
+                }).then((data) => {
+                    this.amenities[arrayIndex] = data;
+                }).catch(() => {
+                    this.error = true;
+                });
+            },
+            handleAmenityVerify(amenityId, arrayIndex) {
+                fetch(`/api/businesses/amenities/${amenityId}/verify/`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    return response.json();
+                }).then((data) => {
+                    this.amenities[arrayIndex] = data;
+                }).catch(() => {
+                    this.error = true;
+                });
+            },
+            handleAmenityBulkVerify() {
+                const bulkUpdates = this.amenities.filter((amenity) => amenity.is_supported !== null);
+                const data = {
+                    amenities: bulkUpdates,
+                }
+                fetch(`/api/businesses/${this.id}/amenities/verify/`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                        Accept: "application/json",
+                    },
+                    mode: "same-origin",
+                    body: JSON.stringify(data),
+                }).then((response) => {
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    return response.json();
+                }).then((data) => {
+                    this.amenities = data.amenities;
+                }).catch(() => {
+                    this.error = true;
+                });
+            },
+            async handleOpenModal(amenityId) {
+                this.currentAmenity = await (await fetch(`/api/businesses/amenities/${amenityId}`)).json();
+                this.showModal = true;
+            },
+            async handleCloseModal() {
+                this.currentAmenity = null;
+                this.showModal = false;
+            },
+        }))
+    });
+</script>
+{% endblock %}
