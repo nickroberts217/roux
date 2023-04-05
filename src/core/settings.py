@@ -14,7 +14,7 @@ env = environ.Env(
     SECRET_KEY=(str, "django-insecure_roux"),
     ADMIN_PASS=(str, "pass"),
 )
-env_file = os.path.join(BASE_DIR, ".env")
+env_file = os.path.join(BASE_DIR, "../.env")
 
 try:
     _, os.environ["GOOGLE_CLOUD_PROJECT"] = google.auth.default()
@@ -49,8 +49,11 @@ ADMIN_PASS = env("ADMIN_PASS")
 
 CLOUDRUN_SERVICE_URL = env("CLOUDRUN_SERVICE_URL", default=None)
 if CLOUDRUN_SERVICE_URL:
-    ALLOWED_HOSTS = [urlparse(CLOUDRUN_SERVICE_URL).netloc]
-    CSRF_TRUSTED_ORIGINS = [CLOUDRUN_SERVICE_URL]
+    ALLOWED_HOSTS = [
+        urlparse(CLOUDRUN_SERVICE_URL).netloc,
+        ".roux.coffee",
+    ]
+    CSRF_TRUSTED_ORIGINS = [CLOUDRUN_SERVICE_URL, "https://*.roux.coffee"]
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 else:
